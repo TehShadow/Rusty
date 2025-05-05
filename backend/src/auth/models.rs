@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
+
 
 #[derive(Deserialize)]
 pub struct RegisterRequest {
@@ -15,4 +17,11 @@ pub struct LoginRequest {
 #[derive(Serialize)]
 pub struct TokenResponse {
     pub token: String,
+}
+
+#[derive(Serialize)]
+pub struct UserProfile {
+    pub id: String,
+    pub username: String,
+    pub created_at: Option<OffsetDateTime>
 }

@@ -11,11 +11,12 @@ serde_json = "1"
 tower = "0.5.2"
 jsonwebtoken = "9"
 uuid = { version = "1", features = ["v4"] }
-sqlx = { version = "0.8.5", features = ["postgres", "runtime-tokio-native-tls", "uuid", "macros"] }
+sqlx = { version = "0.8.5", features = ["postgres", "runtime-tokio-native-tls", "uuid", "macros","time"] }
 dotenvy = "0.15"
 thiserror = "2.0.12"
 tracing-subscriber = "0.3"
-chrono = "0.4.41"
+chrono = {version = "0.4.41" , features =["serde"]}
 argon2 = "0.5"
 rand_core = "0.9.3"
 async-trait = "0.1"
+time = { version = "0.3", features = ["serde"] }

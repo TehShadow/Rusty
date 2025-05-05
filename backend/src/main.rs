@@ -7,6 +7,7 @@ use axum::{
 mod auth;
 mod routes;
 mod db;
+mod route_handlers;
 
 #[tokio::main]
 async fn main() {

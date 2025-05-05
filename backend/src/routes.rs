@@ -1,15 +1,12 @@
-use axum::{Router, routing::{post, get}};
+use axum::{Router, routing::{post, get}, Json, http::StatusCode};
 use crate::auth::handlers::{register, login};
 use crate::auth::middleware::{auth_middleware, USER};
+use crate::route_handlers::me::me_handler;
 
-async fn protected() -> String {
-    let user = USER.with(|u| u.clone());
-    format!("Hello, user {}!", user.user_id)
-}
 
 pub fn create_routes() -> Router<sqlx::PgPool> {
     Router::new()
         .route("/register", post(register))
         .route("/login", post(login))
-        .route("/me", get(protected).route_layer(axum::middleware::from_fn(auth_middleware)))
+        .route("/me", get(me_handler).route_layer(axum::middleware::from_fn(auth_middleware)))
 }
