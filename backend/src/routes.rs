@@ -1,7 +1,8 @@
 use axum::{Router, routing::{post, get}, Json, http::StatusCode};
-use crate::auth::handlers::{register, login};
+use crate::{auth::handlers::{login, register}, route_handlers};
 use crate::auth::middleware::{auth_middleware, USER};
 use crate::route_handlers::me::me_handler;
+use crate::route_handlers::ws::ws_handler;
 
 
 pub fn create_routes() -> Router<sqlx::PgPool> {
@@ -9,4 +10,5 @@ pub fn create_routes() -> Router<sqlx::PgPool> {
         .route("/register", post(register))
         .route("/login", post(login))
         .route("/me", get(me_handler).route_layer(axum::middleware::from_fn(auth_middleware)))
+        .route("/ws", get(ws_handler)) // 👈 WebSocket route
 }
