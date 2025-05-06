@@ -1,5 +1,4 @@
 -- Add migration script here
--- inside your migration .sql file
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE users (

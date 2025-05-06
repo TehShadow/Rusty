@@ -8,45 +8,41 @@ export default function RegisterPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
   const handleRegister = async () => {
-    const success = await registerUser(username, password);
-    if (success) {
-      router.push("/login");
+    const result = await registerUser(username, password);
+    if (result) {
+      setSuccess(true);
+      setTimeout(() => router.push("/login"), 1500);
     } else {
       setError("Registration failed");
     }
   };
 
   return (
-    <div className="max-w-sm mx-auto">
-      <h1 className="text-2xl mb-4">Register</h1>
+    <div className="max-w-md mx-auto mt-20 p-6 bg-white rounded shadow">
+      <h1 className="text-2xl mb-4 text-center">Register</h1>
       <input
-        type="text"
+        className="w-full mb-3 p-2 border rounded"
         placeholder="Username"
-        className="w-full mb-2 p-2 border"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
       />
       <input
+        className="w-full mb-3 p-2 border rounded"
         type="password"
         placeholder="Password"
-        className="w-full mb-4 p-2 border"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
       {error && <div className="text-red-500 mb-2">{error}</div>}
+      {success && <div className="text-green-600 mb-2">Registered! Redirecting...</div>}
       <button
-        className="w-full bg-green-600 text-white p-2 rounded mb-2"
         onClick={handleRegister}
+        className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded"
       >
         Register
-      </button>
-      <button
-        className="w-full bg-gray-600 text-white p-2 rounded"
-        onClick={() => router.push("/login")}
-      >
-        Back to Login
       </button>
     </div>
   );

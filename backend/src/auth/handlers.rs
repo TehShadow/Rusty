@@ -2,8 +2,8 @@ use axum::{extract::State, Json, http::StatusCode};
 use sqlx::PgPool;
 use argon2::{Argon2, PasswordHasher,PasswordVerifier};
 use argon2::password_hash::{SaltString, rand_core::OsRng, PasswordHash};
-use crate::auth::models::{RegisterRequest,LoginRequest,TokenResponse};
 use crate::auth::jwt::create_jwt;
+use crate::auth::models::{RegisterRequest, LoginRequest, TokenResponse};
 
 
 pub async fn register(

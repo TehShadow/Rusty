@@ -25,3 +25,13 @@ pub struct UserProfile {
     pub username: String,
     pub created_at: Option<OffsetDateTime>
 }
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct Message {
+    pub id: Option<String>,
+    pub sender_id: Option<String>,
+    pub recipient_id: Option<String>,
+    pub content: String,
+    pub sent_at: Option<OffsetDateTime>,
+}
+

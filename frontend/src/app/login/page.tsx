@@ -10,44 +10,33 @@ export default function LoginPage() {
   const [error, setError] = useState("");
 
   const handleLogin = async () => {
-    const token = await loginUser(username, password);
-    if (token) {
-      localStorage.setItem("jwt", token);
-      router.push("/chat");
-    } else {
-      setError("Login failed");
-    }
+    const success = await loginUser(username, password);
+    if (success) router.push("/chat");
+    else setError("Invalid credentials");
   };
 
   return (
-    <div className="max-w-sm mx-auto">
-      <h1 className="text-2xl mb-4">Login</h1>
+    <div className="max-w-md mx-auto mt-20 p-6 bg-white rounded shadow">
+      <h1 className="text-2xl mb-4 text-center">Login</h1>
       <input
-        type="text"
+        className="w-full mb-3 p-2 border rounded"
         placeholder="Username"
-        className="w-full mb-2 p-2 border"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
       />
       <input
+        className="w-full mb-3 p-2 border rounded"
         type="password"
         placeholder="Password"
-        className="w-full mb-4 p-2 border"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
       {error && <div className="text-red-500 mb-2">{error}</div>}
       <button
-        className="w-full bg-blue-600 text-white p-2 rounded mb-2"
         onClick={handleLogin}
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded"
       >
-        Log In
-      </button>
-      <button
-        className="w-full bg-gray-600 text-white p-2 rounded"
-        onClick={() => router.push("/register")}
-      >
-        Go to Register
+        Login
       </button>
     </div>
   );
