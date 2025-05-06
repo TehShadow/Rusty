@@ -13,11 +13,11 @@ pub fn create_routes() -> Router<sqlx::PgPool> {
         .route("/me", get(me_handler))
         .route("/users", get(get_users))
         .route("/rooms", post(create_room).get(list_rooms))
-        .route("/rooms/{room_id}/messages", get(get_messages_by_room).post(send_message_to_room))
-        .route("/ws", get(ws_handler));
+        .route("/rooms/{room_id}/messages", get(get_messages_by_room).post(send_message_to_room));
 
     Router::new()
         .route("/register", post(register))
         .route("/login", post(login))
+        .route("/ws", get(ws_handler))
         .merge(protected_routes.route_layer(axum::middleware::from_fn(auth_middleware)))
 }
