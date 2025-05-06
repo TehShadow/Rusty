@@ -1,12 +1,12 @@
 use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey, errors::Error as JwtError};
 use serde::{Serialize, Deserialize};
 use std::env;
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
     pub exp: usize,
 }
+
 
 // Used in protected route to decode the JWT
 pub fn decode_jwt(token: &str) -> Result<Claims, JwtError> {

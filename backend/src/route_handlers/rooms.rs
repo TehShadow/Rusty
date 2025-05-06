@@ -1,142 +1,125 @@
-// Full room-based chat handler (rooms.rs)
-
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    Json,
-};
-use serde::{Deserialize, Serialize};
+use axum::{extract::{State, Json, Path}, http::StatusCode};
 use sqlx::PgPool;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use time::OffsetDateTime;
 use crate::auth::middleware::USER;
 
 #[derive(Deserialize)]
-pub struct CreateRoom {
+pub struct CreateRoomRequest {
     pub name: Option<String>,
     pub is_group: bool,
     pub member_ids: Vec<String>,
 }
 
-#[derive(Deserialize)]
-pub struct SendRoomMessage {
-    pub content: String,
-}
-
 #[derive(Serialize)]
-pub struct Room {
+pub struct RoomResponse {
     pub id: String,
     pub name: Option<String>,
     pub is_group: bool,
 }
 
-#[derive(Serialize)]
-pub struct ChatMessage {
-    pub id: String,
-    pub sender_id: String,
-    pub content: String,
-    pub sent_at: Option<OffsetDateTime>,
-}
-
 pub async fn create_room(
     State(db): State<PgPool>,
-    Json(payload): Json<CreateRoom>,
-) -> Result<Json<Room>, StatusCode> {
+    Json(payload): Json<CreateRoomRequest>,
+) -> Result<Json<RoomResponse>, StatusCode> {
+    let user_id = USER
+        .with(|user| Uuid::parse_str(&user.user_id))
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     let room = sqlx::query!(
-        "INSERT INTO chat_rooms (name, is_group) VALUES ($1, $2) RETURNING id, name, is_group",
+        r#"INSERT INTO rooms (name, is_group, created_by) VALUES ($1, $2, $3) RETURNING id, name, is_group"#,
         payload.name,
-        payload.is_group
+        payload.is_group,
+        user_id
     )
     .fetch_one(&db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    for user_id in &payload.member_ids {
-        let uid = Uuid::parse_str(user_id).map_err(|_| StatusCode::BAD_REQUEST)?;
-        sqlx::query!("INSERT INTO room_members (user_id, room_id) VALUES ($1, $2)", uid, room.id)
-            .execute(&db)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    for uid in payload.member_ids {
+        let parsed = Uuid::parse_str(&uid).map_err(|_| StatusCode::BAD_REQUEST)?;
+        sqlx::query!(
+            "INSERT INTO room_members (room_id, user_id) VALUES ($1, $2)",
+            room.id,
+            parsed
+        )
+        .execute(&db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
 
-    Ok(Json(Room {
+    Ok(Json(RoomResponse {
         id: room.id.to_string(),
         name: room.name,
-        is_group: room.is_group.unwrap_or(false),
+        is_group: room.is_group,
     }))
 }
 
 pub async fn list_rooms(
     State(db): State<PgPool>,
-) -> Result<Json<Vec<Room>>, StatusCode> {
-    let user = USER.with(|u| u.clone());
-    let uid = Uuid::parse_str(&user.user_id).map_err(|_| StatusCode::BAD_REQUEST)?;
+) -> Result<Json<Vec<RoomResponse>>, StatusCode> {
+    let user_id = USER
+        .with(|user| Uuid::parse_str(&user.user_id))
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let rows = sqlx::query!(
-        "SELECT r.id, r.name, r.is_group FROM chat_rooms r \
-         JOIN room_members m ON r.id = m.room_id WHERE m.user_id = $1",
-        uid
+    let raw_rooms = sqlx::query!(
+        r#"
+        SELECT r.id, r.name, r.is_group
+        FROM rooms r
+        JOIN room_members m ON r.id = m.room_id
+        WHERE m.user_id = $1
+        "#,
+        user_id
     )
     .fetch_all(&db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let rooms = rows
+    let rooms = raw_rooms
         .into_iter()
-        .map(|r| Room {
+        .map(|r| RoomResponse {
             id: r.id.to_string(),
             name: r.name,
-            is_group: r.is_group.unwrap_or(false),
+            is_group: r.is_group,
         })
         .collect();
 
     Ok(Json(rooms))
 }
 
-pub async fn send_message_to_room(
+pub async fn list_room_members(
     State(db): State<PgPool>,
-    Path(room_id): Path<String>,
-    Json(payload): Json<SendRoomMessage>,
+    Path(room_id): Path<Uuid>,
+) -> Result<Json<Vec<String>>, StatusCode> {
+    let members = sqlx::query_scalar!(
+        "SELECT user_id::TEXT FROM room_members WHERE room_id = $1",
+        room_id
+    )
+    .fetch_all(&db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .into_iter()
+    .filter_map(|id| id)
+    .collect::<Vec<String>>();
+
+    Ok(Json(members))
+}
+
+pub async fn add_room_member(
+    State(db): State<PgPool>,
+    Path(room_id): Path<Uuid>,
+    Json(user): Json<String>,
 ) -> Result<StatusCode, StatusCode> {
-    let user = USER.with(|u| u.clone());
-    let uid = Uuid::parse_str(&user.user_id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    let rid = Uuid::parse_str(&room_id).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let user_uuid = Uuid::parse_str(&user).map_err(|_| StatusCode::BAD_REQUEST)?;
 
     sqlx::query!(
-        "INSERT INTO messages (sender_id, room_id, content) VALUES ($1, $2, $3)",
-        uid,
-        rid,
-        payload.content
+        "INSERT INTO room_members (room_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        room_id,
+        user_uuid
     )
     .execute(&db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::CREATED)
-}
-
-pub async fn get_messages_by_room(
-    State(db): State<PgPool>,
-    Path(room_id): Path<String>,
-) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
-    let rid = Uuid::parse_str(&room_id).map_err(|_| StatusCode::BAD_REQUEST)?;
-
-    let msgs = sqlx::query!(
-        "SELECT id, sender_id, content, sent_at FROM messages WHERE room_id = $1 ORDER BY sent_at ASC",
-        rid
-    )
-    .fetch_all(&db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok(Json(
-        msgs.into_iter()
-            .map(|m| ChatMessage {
-                id: m.id.to_string(),
-                sender_id: m.sender_id.to_string(),
-                content: m.content,
-                sent_at: m.sent_at,
-            })
-            .collect(),
-    ))
 }

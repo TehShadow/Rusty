@@ -1,4 +1,4 @@
-use sqlx::{PgPool, postgres::PgPoolOptions};
+pub use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::env;
 
 pub async fn init_db() -> Result<PgPool, sqlx::Error> {

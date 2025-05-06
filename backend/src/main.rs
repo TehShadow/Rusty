@@ -1,5 +1,5 @@
 use axum::{
-    routing::{get, post},
+    routing::get,
     Router,
 };
 use tower_http::cors::{CorsLayer, Any };
@@ -31,11 +31,11 @@ async fn main() {
         .layer(cors)
         .with_state(db_pool.clone());
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3001")
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:4000")
         .await
-        .expect("Failed to bind to port 3000");
+        .expect("Failed to bind to port 3001");
 
-    println!("🚀 Server running at http://0.0.0.0:3001");
+    println!("🚀 Server running at http://0.0.0.0:4000");
     axum::serve(listener, app)
         .await
         .expect("Server crashed");

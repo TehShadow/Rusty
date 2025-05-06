@@ -1,101 +1,107 @@
 use axum::{
-    extract::{Query, WebSocketUpgrade, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Path, Query, State,
+    },
+    http::StatusCode,
     response::IntoResponse,
-    extract::ws::{WebSocket, Message},
 };
-use serde::Deserialize;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use futures_util::{SinkExt, StreamExt};
+use once_cell::sync::Lazy;
+use serde_json::json;
+use sqlx::PgPool;
+use std::{collections::HashMap, sync::Mutex};
 use tokio::sync::broadcast;
 use uuid::Uuid;
+
 use crate::auth::jwt::decode_jwt;
-use futures_util::{StreamExt, SinkExt};
-use sqlx::PgPool;
 
-#[derive(Debug, Deserialize)]
-pub struct WsQuery {
-    token: String,
-    room_id: String,
-}
-
-type Tx = broadcast::Sender<(String, String)>;
-
-lazy_static::lazy_static! {
-    static ref ROOMS: Arc<Mutex<HashMap<Uuid, Tx>>> = Arc::new(Mutex::new(HashMap::new()));
-}
+static ROOMS: Lazy<Mutex<HashMap<Uuid, broadcast::Sender<String>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 pub async fn ws_handler(
+    Path(room_id): Path<Uuid>,
     ws: WebSocketUpgrade,
-    Query(query): Query<WsQuery>,
-    State(pool): State<PgPool>,
+    Query(params): Query<HashMap<String, String>>,
+    State(db): State<PgPool>,
 ) -> impl IntoResponse {
-    let claims = match decode_jwt(&query.token) {
-        Ok(c) => c,
-        Err(_) => return axum::http::StatusCode::UNAUTHORIZED.into_response(),
+
+    if let Some(raw) = params.get("token") {
+        println!("Raw token: {}", raw);
+        let decoded = decode_jwt(raw.strip_prefix("Bearer ").unwrap_or(raw));
+        println!("Decoded: {:?}", decoded);
+    }
+    // Extract token from query string (?token=...)
+    let token = params.get("token").cloned();
+
+    let user_id = token
+        .and_then(|t| {
+            let t = t.strip_prefix("Bearer ").unwrap_or(&t);
+            decode_jwt(t).ok()
+        })
+        .map(|claims| claims.sub)
+        .and_then(|id| Uuid::parse_str(&id).ok());
+
+    let user_id = match user_id {
+        Some(uid) => uid,
+        None => return StatusCode::UNAUTHORIZED.into_response(),
     };
 
-    let user_id = claims.sub;
-    let room_id = match Uuid::parse_str(&query.room_id) {
-        Ok(id) => id,
-        Err(_) => return axum::http::StatusCode::BAD_REQUEST.into_response(),
-    };
-
+    // Set up broadcast channel
     let tx = {
         let mut rooms = ROOMS.lock().unwrap();
-        rooms
-            .entry(room_id)
+        rooms.entry(room_id)
             .or_insert_with(|| broadcast::channel(100).0)
             .clone()
     };
 
-    ws.on_upgrade(move |socket| handle_socket(socket, tx, room_id, user_id, pool))
+    ws.on_upgrade(move |socket| handle_socket(socket, room_id, user_id, db, tx))
 }
 
-async fn handle_socket(socket: WebSocket, tx: Tx, room_id: Uuid, user_id: String, pool: PgPool) {
+async fn handle_socket(
+    socket: WebSocket,
+    room_id: Uuid,
+    user_id: Uuid,
+    db: PgPool,
+    tx: broadcast::Sender<String>,
+) {
     let mut rx = tx.subscribe();
     let (mut sender, mut receiver) = socket.split();
-    let user_id_clone = user_id.clone();
 
+    // Task to send messages from broadcast channel to this socket
     let send_task = tokio::spawn(async move {
-        while let Ok((uid, msg)) = rx.recv().await {
-            if uid != user_id_clone {
-                let _ = sender
-                    .send(Message::Text(
-                        serde_json::to_string(&serde_json::json!({
-                            "type": "message",
-                            "payload": {
-                                "sender_id": uid,
-                                "content": msg,
-                            }
-                        }))
-                        .unwrap()
-                        .into(),
-                    ))
-                    .await;
+        while let Ok(msg) = rx.recv().await {
+            if sender.send(Message::Text(msg.into())).await.is_err() {
+                break;
             }
         }
     });
 
+    // Task to receive messages from client and broadcast to others
     let recv_task = tokio::spawn(async move {
-        while let Some(Ok(Message::Text(txt))) = receiver.next().await {
-            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&txt) {
-                if let Some(content) = val.get("content").and_then(|c| c.as_str()) {
-                    let _ = tx.send((user_id.clone(), content.to_string()));
+        while let Some(Ok(Message::Text(txt_bytes))) = receiver.next().await {
+            let content = txt_bytes.to_string(); // Convert Utf8Bytes -> String
 
-                    if let Ok(sender_uuid) = Uuid::parse_str(&user_id) {
-                        let _ = sqlx::query!(
-                            "INSERT INTO messages (sender_id, room_id, content) VALUES ($1, $2, $3)",
-                            sender_uuid,
-                            room_id,
-                            content
-                        )
-                        .execute(&pool)
-                        .await;
-                    }
-                }
-            }
+            let payload = json!({
+                "sender_id": user_id.to_string(),
+                "content": content
+            });
+
+            // Insert message into DB
+            let _ = sqlx::query!(
+                "INSERT INTO messages (room_id, sender_id, content) VALUES ($1, $2, $3)",
+                room_id,
+                user_id,
+                content
+            )
+            .execute(&db)
+            .await;
+
+            // Broadcast message to all subscribers
+            let _ = tx.send(payload.to_string());
         }
     });
 
-    let _ = tokio::try_join!(send_task, recv_task);
+    // Wait for either task to complete
+    let _ = tokio::join!(send_task, recv_task);
 }

@@ -27,7 +27,7 @@ pub async fn me_handler(State(db): State<PgPool>) -> Result<Json<UserProfile>, S
         Some(row) => Ok(Json(UserProfile {
             id: row.id.to_string(),
             username: row.username,
-            created_at: row.created_at,
+            created_at: Some(row.created_at),
         })),
         None => Err(StatusCode::NOT_FOUND),
     }
