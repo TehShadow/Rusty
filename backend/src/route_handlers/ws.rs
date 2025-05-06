@@ -25,13 +25,7 @@ pub async fn ws_handler(
     Query(params): Query<HashMap<String, String>>,
     State(db): State<PgPool>,
 ) -> impl IntoResponse {
-
-    if let Some(raw) = params.get("token") {
-        println!("Raw token: {}", raw);
-        let decoded = decode_jwt(raw.strip_prefix("Bearer ").unwrap_or(raw));
-        println!("Decoded: {:?}", decoded);
-    }
-    // Extract token from query string (?token=...)
+    // Extract token from query (?token=...)
     let token = params.get("token").cloned();
 
     let user_id = token
@@ -47,7 +41,7 @@ pub async fn ws_handler(
         None => return StatusCode::UNAUTHORIZED.into_response(),
     };
 
-    // Set up broadcast channel
+    // Set up broadcast channel for the room
     let tx = {
         let mut rooms = ROOMS.lock().unwrap();
         rooms.entry(room_id)
@@ -68,7 +62,7 @@ async fn handle_socket(
     let mut rx = tx.subscribe();
     let (mut sender, mut receiver) = socket.split();
 
-    // Task to send messages from broadcast channel to this socket
+    // Sending messages to client
     let send_task = tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
             if sender.send(Message::Text(msg.into())).await.is_err() {
@@ -77,31 +71,40 @@ async fn handle_socket(
         }
     });
 
-    // Task to receive messages from client and broadcast to others
+    // Receiving messages from client
     let recv_task = tokio::spawn(async move {
         while let Some(Ok(Message::Text(txt_bytes))) = receiver.next().await {
-            let content = txt_bytes.to_string(); // Convert Utf8Bytes -> String
+            let content = txt_bytes.to_string();
 
-            let payload = json!({
-                "sender_id": user_id.to_string(),
-                "content": content
-            });
-
-            // Insert message into DB
-            let _ = sqlx::query!(
-                "INSERT INTO messages (room_id, sender_id, content) VALUES ($1, $2, $3)",
-                room_id,
-                user_id,
-                content
+            // Fetch sender's username
+            if let Ok(sender_row) = sqlx::query!(
+                "SELECT username FROM users WHERE id = $1",
+                user_id
             )
-            .execute(&db)
-            .await;
+            .fetch_one(&db)
+            .await
+            {
+                // Save message to DB
+                let _ = sqlx::query!(
+                    "INSERT INTO messages (room_id, sender_id, content) VALUES ($1, $2, $3)",
+                    room_id,
+                    user_id,
+                    content
+                )
+                .execute(&db)
+                .await;
 
-            // Broadcast message to all subscribers
-            let _ = tx.send(payload.to_string());
+                // Prepare broadcast payload
+                let payload = json!({
+                    "sender_id": user_id.to_string(),
+                    "username": sender_row.username,
+                    "content": content
+                });
+
+                let _ = tx.send(payload.to_string());
+            }
         }
     });
 
-    // Wait for either task to complete
     let _ = tokio::join!(send_task, recv_task);
 }
