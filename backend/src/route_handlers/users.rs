@@ -11,7 +11,9 @@ pub struct SimpleUser {
 pub async fn get_users(State(db): State<PgPool>) -> Json<Vec<SimpleUser>> {
     let users = sqlx::query_as!(
         SimpleUser,
-        "SELECT id::text, username FROM users"
+        r#"
+        SELECT id::text, username FROM users
+        "#
     )
     .fetch_all(&db)
     .await

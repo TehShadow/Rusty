@@ -5,17 +5,9 @@ use axum::{
     response::Response,
 };
 use crate::auth::jwt::decode_jwt;
+use crate::auth::current_user::CurrentUser;
 
-#[derive(Clone, Debug)]
-pub struct CurrentUser {
-    pub user_id: String,
-}
-
-tokio::task_local! {
-    pub static USER: CurrentUser;
-}
-
-pub async fn auth_middleware(req: Request, next: Next) -> Result<Response, StatusCode> {
+pub async fn auth_middleware(mut req: Request, next: Next) -> Result<Response, StatusCode> {
     let auth_header = req
         .headers()
         .get(header::AUTHORIZATION)
@@ -29,5 +21,6 @@ pub async fn auth_middleware(req: Request, next: Next) -> Result<Response, Statu
         user_id: claims.sub,
     };
 
-    Ok(USER.scope(user, next.run(req)).await)
+    req.extensions_mut().insert(user);
+    Ok(next.run(req).await)
 }

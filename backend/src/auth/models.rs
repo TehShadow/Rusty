@@ -23,7 +23,7 @@ pub struct TokenResponse {
 pub struct UserProfile {
     pub id: String,
     pub username: String,
-    pub created_at: Option<OffsetDateTime>
+    pub created_at: String
 }
 
 #[derive(Serialize, sqlx::FromRow)]

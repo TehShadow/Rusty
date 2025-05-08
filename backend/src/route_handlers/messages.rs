@@ -1,8 +1,11 @@
-use axum::{extract::{State, Json, Path}, http::StatusCode};
+use axum::{
+    extract::{State, Json, Path, Extension},
+    http::StatusCode,
+};
 use sqlx::PgPool;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::auth::middleware::USER;
+use crate::auth::current_user::CurrentUser;
 
 
 #[derive(Serialize)]
@@ -25,16 +28,14 @@ pub struct MessageResponse {
     pub created_at: String,
 }
 
-
-
+#[axum::debug_handler]
 pub async fn post_message_to_room(
     State(db): State<PgPool>,
     Path(room_id): Path<Uuid>,
-    Json(payload): Json<PostMessageRequest>,
+    Extension(CurrentUser { user_id }): Extension<CurrentUser>,
+    Json(payload): Json<PostMessageRequest>
 ) -> Result<StatusCode, StatusCode> {
-    let user_id = USER
-        .with(|user| Uuid::parse_str(&user.user_id))
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let user_id = Uuid::parse_str(&user_id).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     sqlx::query!(
         r#"INSERT INTO messages (room_id, sender_id, content) VALUES ($1, $2, $3)"#,

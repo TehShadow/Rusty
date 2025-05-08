@@ -1,36 +1,27 @@
 use axum::{
     extract::State,
-    http::StatusCode,
-    Json,
+    http::StatusCode, Extension, Json
 };
-use serde::Serialize;
 use sqlx::PgPool;
 use uuid::Uuid;
+use crate::auth::current_user::CurrentUser;
+use crate::auth::models::UserProfile;
 
-use crate::auth::middleware::USER;
-
-// Response struct
-#[derive(Serialize)]
-pub struct UserProfile {
-    pub id: String,
-    pub username: String,
-    pub created_at: String,
-}
-
+#[axum::debug_handler]
 pub async fn me_handler(
     State(db): State<PgPool>,
+    Extension(current_user): Extension<CurrentUser>
 ) -> Result<Json<UserProfile>, StatusCode> {
-    let user = USER.with(|u| u.clone());
-    let user_id = Uuid::parse_str(&user.user_id)
+    let user_uuid = Uuid::parse_str(&current_user.user_id)
         .map_err(|_| StatusCode::BAD_REQUEST)?;
-
+    
     let row = sqlx::query!(
         r#"
         SELECT id, username, created_at
         FROM users
         WHERE id = $1
         "#,
-        user_id
+        user_uuid
     )
     .fetch_optional(&db)
     .await
@@ -38,7 +29,7 @@ pub async fn me_handler(
         eprintln!("DB error in /me: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-
+    
     match row {
         Some(user_row) => {
             let profile = UserProfile {
