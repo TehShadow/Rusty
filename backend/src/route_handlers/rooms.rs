@@ -24,6 +24,18 @@ pub struct MessagePayload {
     pub content: String,
 }
 
+#[derive(Deserialize)]
+pub struct AddRoomMemberRequest {
+    user_id: String,
+}
+
+#[derive(Serialize)]
+pub struct AddRoomMemberResponse {
+    status: String,
+    room_id: Uuid,
+    user_id: Uuid,
+}
+
 pub async fn create_room(
     State(db): State<PgPool>,
     Path(user_id): Path<Uuid>,
@@ -161,9 +173,9 @@ pub async fn list_room_members(
 pub async fn add_room_member(
     State(db): State<PgPool>,
     Path(room_id): Path<Uuid>,
-    Json(user): Json<String>,
-) -> Result<StatusCode, StatusCode> {
-    let user_uuid = Uuid::parse_str(&user).map_err(|_| StatusCode::BAD_REQUEST)?;
+    Json(payload): Json<AddRoomMemberRequest>,
+) -> Result<Json<AddRoomMemberResponse>, StatusCode> {
+    let user_uuid = Uuid::parse_str(&payload.user_id).map_err(|_| StatusCode::BAD_REQUEST)?;
 
     sqlx::query!(
         "INSERT INTO room_members (room_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
@@ -174,5 +186,9 @@ pub async fn add_room_member(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(StatusCode::CREATED)
+    Ok(Json(AddRoomMemberResponse {
+        status: "member_added".to_string(),
+        room_id,
+        user_id: user_uuid,
+    }))
 }

@@ -33,7 +33,7 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:4000")
         .await
-        .expect("Failed to bind to port 3001");
+        .expect("Failed to bind to port 4000");
 
     println!("🚀 Server running at http://0.0.0.0:4000");
     axum::serve(listener, app)

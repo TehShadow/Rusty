@@ -43,8 +43,8 @@ pub fn create_routes() -> Router<PgPool> {
         // Friendships
         .route("/friends/{user_id}", get(list_friends).post(add_friend_request))
         .route("/friends/{user_id}/requests", get(get_friend_requests))
-        .route("/friends/{user_i}/requests/{request_id}/accept", post(accept_friend_request))
-        .route("/friends/{user_i}/requests/{request_id}", delete(delete_friend_request));
+        .route("/friends/{user_id}/requests/{request_id}/accept", post(accept_friend_request))
+        .route("/friends/{user_id}/requests/{request_id}/delete", delete(delete_friend_request));
 
     // 🆓 Public routes (no auth)
     let unprotected_routes = Router::new()
