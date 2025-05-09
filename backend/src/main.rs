@@ -9,6 +9,7 @@ mod auth;
 mod routes;
 mod db;
 mod route_handlers;
+mod models;
 
 #[tokio::main]
 async fn main() {
@@ -26,8 +27,8 @@ async fn main() {
     
 
     let app = Router::new()
-        .route("/", get(|| async { "Hello, World!" }))
-        .merge(routes::create_routes())
+        .route("/api/health", get(|| async { "Alive!" }))
+        .merge(routes::create_routes(db_pool.clone()))
         .layer(cors)
         .with_state(db_pool.clone());
 
@@ -36,7 +37,7 @@ async fn main() {
         .expect("Failed to bind to port 4000");
 
     println!("🚀 Server running at http://0.0.0.0:4000");
-    axum::serve(listener, app)
+    axum::serve(listener, app.into_make_service())
         .await
         .expect("Server crashed");
 }

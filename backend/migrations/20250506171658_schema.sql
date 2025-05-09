@@ -9,21 +9,20 @@ CREATE TABLE users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Rooms table (group or 1-on-1)
+-- Rooms (servers) table
 CREATE TABLE rooms (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT, -- null = direct message
-  is_group BOOLEAN NOT NULL,
-  created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  name TEXT NOT NULL,
+  owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Room members (many-to-many)
+-- Room members table (fixed primary key + consistent timestamp type)
 CREATE TABLE room_members (
-  room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (room_id, user_id)
+  room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, room_id)
 );
 
 CREATE INDEX idx_room_members_user ON room_members(user_id);
@@ -32,31 +31,46 @@ CREATE INDEX idx_room_members_user ON room_members(user_id);
 CREATE TABLE messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
-  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  author_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
   content TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  edited_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_messages_room_sent ON messages(room_id, created_at);
-
--- Friendships: symmetric & deduplicated
-CREATE TABLE friendships (
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  friend_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, friend_id),
-  CHECK (user_id < friend_id)
-);
-
-CREATE INDEX idx_friendships_user ON friendships(user_id);
-
--- Friend requests: one-way pending requests
-CREATE TABLE friend_requests (
+-- Direct messages with self-DM check
+CREATE TABLE direct_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(sender_id, receiver_id)
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (sender_id != receiver_id)
 );
 
-CREATE INDEX idx_friend_requests_receiver ON friend_requests(receiver_id);
+CREATE INDEX idx_messages_room_sent ON messages(room_id, created_at);
+CREATE INDEX idx_direct_messages ON direct_messages(sender_id, created_at);
+
+-- Friend/block relationships with directionality check
+CREATE TABLE user_relationships (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  related_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'friends', 'blocked')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, related_user_id),
+  CHECK (user_id != related_user_id),
+  CHECK (user_id < related_user_id)
+);
+
+CREATE INDEX idx_user_relationships ON user_relationships(user_id);
+
+-- Sessions table
+CREATE TABLE sessions (
+  token TEXT PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ip_address TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX idx_sessions_user_id ON sessions(user_id);
