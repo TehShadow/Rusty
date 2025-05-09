@@ -8,7 +8,7 @@ use crate::route_handlers::me::get_me;
 use crate::route_handlers::users::get_user_by_id;
 use crate::route_handlers::users::{get_direct_messages,send_direct_message};
 use crate::route_handlers::room::{create_room,join_room,list_my_rooms,send_room_message,get_room_messages};
-
+use crate::route_handlers::relationships::{send_friend_request,accept_friend_request,block_user,list_friends,remove_relationship,list_pending_requests};
 use crate::auth::middleware::auth_middleware;
 use sqlx::PgPool;
 
@@ -20,8 +20,13 @@ pub fn create_routes(pool: PgPool) -> Router<PgPool> {
         .route("/api/user/{:user}",get(get_user_by_id))
         .route("/api/user/dm/{:user}",get(get_direct_messages).post(send_direct_message))
 
+        // Relationships
+        .route("/api/relationships/{:id}", post(send_friend_request).delete(remove_relationship))
+        .route("/api/relationships/{:id}/accept", post(accept_friend_request))
+        .route("/api/relationships/{:id}/block", post(block_user))
+        .route("/api/relationships/friends", get(list_friends))
+        .route("/api/relationships/pending",get(list_pending_requests))
         // Rooms
-
         .route("/api/rooms", post(create_room).get(list_my_rooms))
         .route("/api/rooms/{:id}/join", post(join_room))
         .route("/api/rooms/{:id}/messages", get(get_room_messages).post(send_room_message));
