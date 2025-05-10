@@ -21,8 +21,8 @@ async fn main() {
         .expect("Failed to connect to the database");
 
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods([Method::POST, Method::GET])
+        .allow_origin("http://localhost:3000".parse::<axum::http::HeaderValue>().unwrap())
+        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PUT])
         .allow_headers(Any);
     
 

@@ -29,8 +29,6 @@ pub async fn auth_middleware(
         .and_then(|s| s.strip_prefix("Bearer "))
         .ok_or((StatusCode::UNAUTHORIZED, "Missing or invalid Authorization header"))?;
 
-    println!("here {token}");
-
     // Decode JWT
     let claims = decode_jwt(token)
         .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid or expired JWT"))?
@@ -43,9 +41,6 @@ pub async fn auth_middleware(
     let session_id = Uuid::parse_str(&claims.session_id)
         .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid session ID"))?;
 
-    println!("{user_id}");
-
-    println!("{session_id}");
 
     // Verify session is valid
     let valid_session = sqlx::query_scalar!(

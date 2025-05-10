@@ -60,14 +60,10 @@ pub async fn send_direct_message(
 }
 
 pub async fn get_direct_messages(
-    Path(other_user_id): Path<Uuid>,
     Extension(CurrentUser { id: my_id, .. }): Extension<CurrentUser>,
+    Path(other_user_id): Path<Uuid>,
     State(pool): State<PgPool>,
 ) -> Result<Json<Vec<DirectMessage>>, (StatusCode, String)> {
-    if my_id == other_user_id {
-        return Err((StatusCode::BAD_REQUEST, "Cannot load DMs with yourself".into()));
-    }
-
     let messages = sqlx::query_as!(
         DirectMessage,
         r#"

@@ -1,7 +1,7 @@
 use axum::{extract::{Extension, State , Path}, Json};
 use sqlx::PgPool;
 use crate::auth::middleware::CurrentUser;
-use crate::models::relationships::Relationship;
+use crate::models::user::SimpleUser;
 use uuid::Uuid;
 use http::StatusCode;
 use serde_json::json;
@@ -105,13 +105,16 @@ pub async fn block_user(
 pub async fn list_friends(
     Extension(CurrentUser { id: my_id, .. }): Extension<CurrentUser>,
     State(pool): State<PgPool>,
-) -> Result<Json<Vec<Relationship>>, (StatusCode, String)> {
+) -> Result<Json<Vec<SimpleUser>>, (StatusCode, String)> {
     let friends = sqlx::query_as!(
-        Relationship,
+        SimpleUser,
         r#"
-        SELECT user_id, related_user_id, status, created_at
-        FROM user_relationships
-        WHERE status = 'friends' AND (user_id = $1 OR related_user_id = $1)
+        SELECT u.id, u.username
+        FROM user_relationships ur
+        JOIN users u ON
+            (u.id = ur.user_id AND ur.related_user_id = $1)
+            OR (u.id = ur.related_user_id AND ur.user_id = $1)
+        WHERE ur.status = 'friends'
         "#,
         my_id
     )
@@ -125,13 +128,16 @@ pub async fn list_friends(
 pub async fn list_pending_requests(
     Extension(CurrentUser { id: my_id, .. }): Extension<CurrentUser>,
     State(pool): State<PgPool>,
-) -> Result<Json<Vec<Relationship>>, (StatusCode, String)> {
-    let pending = sqlx::query_as!(
-        Relationship,
+) -> Result<Json<Vec<SimpleUser>>, (StatusCode, String)> {
+    let users = sqlx::query_as!(
+        SimpleUser,
         r#"
-        SELECT user_id, related_user_id, status, created_at
-        FROM user_relationships
-        WHERE status = 'pending' AND (user_id = $1 OR related_user_id = $1)
+        SELECT u.id, u.username
+        FROM user_relationships ur
+        JOIN users u ON
+            -- this JOIN ensures we get the user who SENT the request
+            (u.id = ur.user_id AND ur.related_user_id = $1)
+        WHERE ur.status = 'pending'
         "#,
         my_id
     )
@@ -139,7 +145,7 @@ pub async fn list_pending_requests(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(pending))
+    Ok(Json(users))
 }
 
 pub async fn remove_relationship(

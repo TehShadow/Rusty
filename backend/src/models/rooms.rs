@@ -20,7 +20,7 @@ pub struct RoomMessageInput {
     pub content: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize , Deserialize)]
 pub struct RoomMessage {
     pub id: Uuid,
     pub room_id: Uuid,
@@ -28,4 +28,12 @@ pub struct RoomMessage {
     pub content: String,
     pub created_at: OffsetDateTime,
     pub edited_at: Option<OffsetDateTime>,
+}
+
+#[derive(Serialize , Deserialize)]
+pub struct RoomInfo {
+    pub id: Uuid,
+    pub name: String,
+    pub owner_id: Uuid,
+    pub created_at: OffsetDateTime,
 }

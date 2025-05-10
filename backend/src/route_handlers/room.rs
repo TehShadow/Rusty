@@ -7,8 +7,28 @@ use sqlx::PgPool;
 use uuid::Uuid;
 use serde_json::json;
 use crate::auth::middleware::CurrentUser;
-use crate::models::rooms::{CreateRoomInput,Room,RoomMessage,RoomMessageInput};
+use crate::models::rooms::{CreateRoomInput,Room,RoomMessage,RoomMessageInput , RoomInfo};
 
+
+pub async fn get_room(
+    Path(room_id): Path<Uuid>,
+    State(pool): State<PgPool>,
+) -> Result<Json<RoomInfo>, (StatusCode, String)> {
+    let room = sqlx::query_as!(
+        RoomInfo,
+        r#"
+        SELECT id, name, owner_id, created_at
+        FROM rooms
+        WHERE id = $1
+        "#,
+        room_id
+    )
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| (StatusCode::NOT_FOUND, e.to_string()))?;
+
+    Ok(Json(room))
+}
 
 
 pub async fn create_room(
@@ -111,6 +131,7 @@ pub async fn send_room_message(
 
     Ok(Json(message))
 }
+
 
 pub async fn get_room_messages(
     Path(room_id): Path<Uuid>,
