@@ -2,7 +2,6 @@ use axum::{extract::State, Json};
 use axum::http::{StatusCode,HeaderMap};
 use axum::response::IntoResponse;
 use axum_extra::extract::cookie::{Cookie, SameSite};
-use sqlx::PgPool;
 use time::Duration;
 use crate::models::user::{LoginInput,RegisterInput,User};
 use argon2::{
@@ -12,13 +11,16 @@ use argon2::{
     },
     Argon2
 };
+
 use uuid::Uuid;
 use time::OffsetDateTime;
 use crate::auth::jwt::create_jwt;
+use crate::state::AppState;
+use std::sync::Arc;
 
 
 pub async fn register(
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<RegisterInput>,
 ) -> Result<Json<User>, (StatusCode, String)> {
     // Generate password hash
@@ -42,7 +44,7 @@ pub async fn register(
         password_hash,
         now
     )
-    .execute(&pool)
+    .execute(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -55,7 +57,7 @@ pub async fn register(
 }
 
 pub async fn login(
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<LoginInput>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     // Step 1: Fetch user manually
@@ -67,7 +69,7 @@ pub async fn login(
         "#,
         payload.username
     )
-    .fetch_optional(&pool)
+    .fetch_optional(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -106,7 +108,7 @@ pub async fn login(
         now,
         expires_at
     )
-    .execute(&pool)
+    .execute(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

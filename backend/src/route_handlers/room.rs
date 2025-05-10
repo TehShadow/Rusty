@@ -3,16 +3,18 @@ use axum::{
     Json,
     http::StatusCode,
 };
-use sqlx::PgPool;
 use uuid::Uuid;
 use serde_json::json;
 use crate::auth::middleware::CurrentUser;
 use crate::models::rooms::{CreateRoomInput,Room,RoomMessage,RoomMessageInput , RoomInfo};
 
 
+use crate::state::AppState;
+use std::sync::Arc;
+
 pub async fn get_room(
     Path(room_id): Path<Uuid>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<RoomInfo>, (StatusCode, String)> {
     let room = sqlx::query_as!(
         RoomInfo,
@@ -23,7 +25,7 @@ pub async fn get_room(
         "#,
         room_id
     )
-    .fetch_one(&pool)
+    .fetch_one(&state.pool)
     .await
     .map_err(|e| (StatusCode::NOT_FOUND, e.to_string()))?;
 
@@ -33,7 +35,7 @@ pub async fn get_room(
 
 pub async fn create_room(
     Extension(CurrentUser { id: owner_id, .. }): Extension<CurrentUser>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<CreateRoomInput>,
 ) -> Result<Json<Room>, (StatusCode, String)> {
     let room = sqlx::query_as!(
@@ -46,7 +48,7 @@ pub async fn create_room(
         payload.name,
         owner_id
     )
-    .fetch_one(&pool)
+    .fetch_one(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -59,7 +61,7 @@ pub async fn create_room(
         owner_id,
         room.id
     )
-    .execute(&pool)
+    .execute(&state.pool)
     .await
     .ok();
 
@@ -69,7 +71,7 @@ pub async fn create_room(
 pub async fn join_room(
     Path(room_id): Path<Uuid>,
     Extension(CurrentUser { id: user_id, .. }): Extension<CurrentUser>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     sqlx::query!(
         r#"
@@ -80,7 +82,7 @@ pub async fn join_room(
         user_id,
         room_id
     )
-    .execute(&pool)
+    .execute(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -89,7 +91,7 @@ pub async fn join_room(
 
 pub async fn list_my_rooms(
     Extension(CurrentUser { id: user_id, .. }): Extension<CurrentUser>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<Room>>, (StatusCode, String)> {
     let rooms = sqlx::query_as!(
         Room,
@@ -101,7 +103,7 @@ pub async fn list_my_rooms(
         "#,
         user_id
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -111,7 +113,7 @@ pub async fn list_my_rooms(
 pub async fn send_room_message(
     Path(room_id): Path<Uuid>,
     Extension(CurrentUser { id: author_id, .. }): Extension<CurrentUser>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<RoomMessageInput>,
 ) -> Result<Json<RoomMessage>, (StatusCode, String)> {
     let message = sqlx::query_as!(
@@ -125,7 +127,7 @@ pub async fn send_room_message(
         author_id,
         payload.content
     )
-    .fetch_one(&pool)
+    .fetch_one(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -136,7 +138,7 @@ pub async fn send_room_message(
 pub async fn get_room_messages(
     Path(room_id): Path<Uuid>,
     Extension(CurrentUser { id: user_id, .. }): Extension<CurrentUser>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<RoomMessage>>, (StatusCode, String)> {
     // Optional: verify user is in the room
     let authorized = sqlx::query_scalar!(
@@ -149,7 +151,7 @@ pub async fn get_room_messages(
         user_id,
         room_id
     )
-    .fetch_one(&pool)
+    .fetch_one(&state.pool)
     .await
     .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Authorization check failed".to_string()))?;
 
@@ -167,7 +169,7 @@ pub async fn get_room_messages(
         "#,
         room_id
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

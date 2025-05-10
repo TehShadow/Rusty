@@ -4,10 +4,11 @@ use axum::{
     middleware::Next,
     response::Response
 };
-use sqlx::PgPool;
 use uuid::Uuid;
 use crate::auth::jwt::decode_jwt;
 use serde::{Serialize, Deserialize};
+use crate::state::AppState;
+use std::sync::Arc;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CurrentUser {
@@ -17,7 +18,7 @@ pub struct CurrentUser {
 }
 
 pub async fn auth_middleware(
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
     mut request: Request,
     next: Next,
 ) -> Result<Response, (StatusCode, &'static str)> {
@@ -53,7 +54,7 @@ pub async fn auth_middleware(
         session_id.to_string(),
         user_id
     )
-    .fetch_one(&pool)
+    .fetch_one(&state.pool)
     .await
     .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "DB error"))?;
 

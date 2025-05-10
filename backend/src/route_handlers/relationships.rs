@@ -1,17 +1,17 @@
 use axum::{extract::{Extension, State , Path}, Json};
-use sqlx::PgPool;
 use crate::auth::middleware::CurrentUser;
 use crate::models::user::SimpleUser;
 use uuid::Uuid;
 use http::StatusCode;
 use serde_json::json;
 
-
+use crate::state::AppState;
+use std::sync::Arc;
 
 pub async fn send_friend_request(
     Path(target_id): Path<Uuid>,
     Extension(CurrentUser { id: my_id, .. }): Extension<CurrentUser>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     if my_id == target_id {
         return Err((StatusCode::BAD_REQUEST, "Can't add yourself".into()));
@@ -35,7 +35,7 @@ pub async fn send_friend_request(
         user_b,
         status
     )
-    .execute(&pool)
+    .execute(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -46,7 +46,7 @@ pub async fn send_friend_request(
 pub async fn accept_friend_request(
     Path(other_id): Path<Uuid>,
     Extension(CurrentUser { id: my_id, .. }): Extension<CurrentUser>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let (user_a, user_b) = if my_id < other_id {
         (my_id, other_id)
@@ -63,7 +63,7 @@ pub async fn accept_friend_request(
         user_a,
         user_b
     )
-    .execute(&pool)
+    .execute(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -77,7 +77,7 @@ pub async fn accept_friend_request(
 pub async fn block_user(
     Path(other_id): Path<Uuid>,
     Extension(CurrentUser { id: my_id, .. }): Extension<CurrentUser>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let (user_a, user_b) = if my_id < other_id {
         (my_id, other_id)
@@ -95,7 +95,7 @@ pub async fn block_user(
         user_a,
         user_b
     )
-    .execute(&pool)
+    .execute(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -104,7 +104,7 @@ pub async fn block_user(
 
 pub async fn list_friends(
     Extension(CurrentUser { id: my_id, .. }): Extension<CurrentUser>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<SimpleUser>>, (StatusCode, String)> {
     let friends = sqlx::query_as!(
         SimpleUser,
@@ -118,7 +118,7 @@ pub async fn list_friends(
         "#,
         my_id
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -127,7 +127,7 @@ pub async fn list_friends(
 
 pub async fn list_pending_requests(
     Extension(CurrentUser { id: my_id, .. }): Extension<CurrentUser>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<SimpleUser>>, (StatusCode, String)> {
     let users = sqlx::query_as!(
         SimpleUser,
@@ -141,7 +141,7 @@ pub async fn list_pending_requests(
         "#,
         my_id
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -151,7 +151,7 @@ pub async fn list_pending_requests(
 pub async fn remove_relationship(
     Path(other_id): Path<Uuid>,
     Extension(CurrentUser { id: my_id, .. }): Extension<CurrentUser>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     if my_id == other_id {
         return Err((StatusCode::BAD_REQUEST, "Cannot unfriend yourself".into()));
@@ -171,7 +171,7 @@ pub async fn remove_relationship(
         user_a,
         user_b
     )
-    .execute(&pool)
+    .execute(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

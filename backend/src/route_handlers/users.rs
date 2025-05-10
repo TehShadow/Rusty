@@ -3,16 +3,18 @@ use axum::{
     Json,
     http::StatusCode,
 };
-use sqlx::PgPool;
 use uuid::Uuid;
 use crate::models::user::SimpleUser;
 use crate::models::messages::{DirectMessage,SendMessageInput};
 use crate::auth::middleware::CurrentUser;
 
 
+use crate::state::AppState;
+use std::sync::Arc;
+
 pub async fn get_user_by_id(
     Path(user_id): Path<Uuid>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<SimpleUser>, (StatusCode, String)> {
     let user = sqlx::query_as!(
         SimpleUser,
@@ -23,7 +25,7 @@ pub async fn get_user_by_id(
         "#,
         user_id
     )
-    .fetch_optional(&pool)
+    .fetch_optional(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -36,7 +38,7 @@ pub async fn get_user_by_id(
 pub async fn send_direct_message(
     Path(receiver_id): Path<Uuid>,
     Extension(CurrentUser { id: sender_id, .. }): Extension<CurrentUser>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<SendMessageInput>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     if sender_id == receiver_id {
@@ -52,7 +54,7 @@ pub async fn send_direct_message(
         receiver_id,
         payload.content
     )
-    .execute(&pool)
+    .execute(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -62,7 +64,7 @@ pub async fn send_direct_message(
 pub async fn get_direct_messages(
     Extension(CurrentUser { id: my_id, .. }): Extension<CurrentUser>,
     Path(other_user_id): Path<Uuid>,
-    State(pool): State<PgPool>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<DirectMessage>>, (StatusCode, String)> {
     let messages = sqlx::query_as!(
         DirectMessage,
@@ -78,7 +80,7 @@ pub async fn get_direct_messages(
         my_id,
         other_user_id
     )
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
