@@ -55,6 +55,15 @@ export default function RoomsPage() {
     }
   }
 
+  const handleCopyButton = async (room_id:string) => {
+    try{
+      await navigator.clipboard.writeText(room_id);
+    }
+    catch(err){
+      console.log(err)
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto mt-8 space-y-8">
       <h1 className="text-2xl font-bold">🏘️ Joined Rooms</h1>
@@ -66,11 +75,22 @@ export default function RoomsPage() {
           {rooms.map((room) => (
             <li
               key={room.id}
-              className="p-3 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer"
+              className="p-3 bg-gray-800 rounded flex justify-between items-center hover:bg-gray-700 cursor-pointer"
               onClick={() => router.push(`/dashboard/rooms/${room.id}`)}
             >
-              <strong>{room.name}</strong>
-              <span className="text-sm text-gray-400 ml-2">({room.id})</span>
+              <div>
+                <strong>{room.name}</strong>
+                <span className="text-sm text-gray-400 ml-2">({room.id})</span>
+              </div>
+              <button
+                  onClick={(e)=>{
+                    e.stopPropagation()
+                    handleCopyButton(room.id)
+                  }}
+                  className="text-sm px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded"
+              >
+              Copy ID
+            </button>
             </li>
           ))}
         </ul>

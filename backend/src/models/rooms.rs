@@ -26,6 +26,7 @@ pub struct RoomMessage {
     pub room_id: Uuid,
     pub author_id: Uuid,
     pub content: String,
+    #[serde(serialize_with = "time::serde::rfc3339::serialize")]
     pub created_at: OffsetDateTime,
     pub edited_at: Option<OffsetDateTime>,
 }
@@ -36,4 +37,10 @@ pub struct RoomInfo {
     pub name: String,
     pub owner_id: Uuid,
     pub created_at: OffsetDateTime,
+}
+
+#[derive(serde::Serialize)]
+pub struct Member {
+    pub id: Uuid,
+    pub username: String,
 }

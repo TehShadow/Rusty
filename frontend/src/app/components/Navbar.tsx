@@ -37,7 +37,6 @@ export default function Navbar() {
     <>
       {/* Mobile Top Bar */}
       <div className="md:hidden bg-gray-900 px-4 py-3 flex justify-between items-center shadow">
-        <span className="text-blue-300 font-bold text-xl">R</span>
         <button onClick={() => setOpen(true)} className="text-white">
           <Menu size={24} />
         </button>
@@ -95,7 +94,7 @@ export default function Navbar() {
 
       {/* Desktop Sidebar */}
       <div className="hidden md:flex flex-col w-60 h-screen bg-gray-800 p-4 shadow-xl fixed top-0 left-0 z-30">
-        <h2 className="text-xl font-bold mb-6 text-center text-blue-300">Rustcord</h2>
+        <h2 className="text-xl font-bold mb-6 text-center text-blue-300">Rusty</h2>
         <ul className="space-y-4">
           <li>
             <Link href="/dashboard" className={isActive('/dashboard')}>🏠 Dashboard</Link>

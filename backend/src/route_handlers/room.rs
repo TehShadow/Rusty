@@ -6,7 +6,7 @@ use axum::{
 use uuid::Uuid;
 use serde_json::json;
 use crate::auth::middleware::CurrentUser;
-use crate::models::rooms::{CreateRoomInput,Room,RoomMessage,RoomMessageInput , RoomInfo};
+use crate::models::rooms::{CreateRoomInput,Room,RoomMessage,RoomMessageInput , RoomInfo , Member};
 
 
 use crate::state::AppState;
@@ -174,4 +174,25 @@ pub async fn get_room_messages(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(messages))
+}
+
+pub async fn list_room_members(
+    Path(room_id): Path<Uuid>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<Member>>, (StatusCode, String)> {
+    let members = sqlx::query_as!(
+        Member,
+        r#"
+        SELECT u.id, u.username
+        FROM room_members rm
+        JOIN users u ON rm.user_id = u.id
+        WHERE rm.room_id = $1
+        "#,
+        room_id
+    )
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(members))
 }

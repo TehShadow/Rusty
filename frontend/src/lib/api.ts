@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: 'http://localhost:4000', // 🔧 Change to your Rust backend URL if needed
+  baseURL: 'http://localhost:4000',
 })
 
 api.interceptors.request.use((config) => {

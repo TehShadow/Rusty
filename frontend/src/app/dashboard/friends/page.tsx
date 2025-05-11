@@ -2,18 +2,22 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import api from '@/lib/api'
-import { useAuth } from '@/app/components/AuthProvider'
 
 interface Friend {
   id: string
   username: string
 }
 
+interface PendingRequest {
+  id: string
+  username: string
+}
+
 export default function FriendsPage() {
-  const { user } = useAuth()
   const router = useRouter()
 
   const [friends, setFriends] = useState<Friend[]>([])
+  const [pending, setPending] = useState<PendingRequest[]>([])
   const [error, setError] = useState('')
   const [searchId, setSearchId] = useState('')
   const [success, setSuccess] = useState('')
@@ -23,12 +27,23 @@ export default function FriendsPage() {
       try {
         const res = await api.get('/api/relationships/friends')
         setFriends(res.data)
-      } catch (err) {
+      } catch {
         setError('Could not fetch friends.')
       }
     }
 
+    const fetchPending = async () => {
+      try {
+        const res = await api.get('/api/relationships/pending')
+        console.log(res.data)
+        setPending(res.data)
+      } catch {
+        setError('Could not fetch pending requests.')
+      }
+    }
+
     fetchFriends()
+    fetchPending()
   }, [])
 
   const handleSendRequest = async () => {
@@ -36,7 +51,7 @@ export default function FriendsPage() {
       await api.post(`/api/relationships/${searchId}`)
       setSuccess('Friend request sent.')
       setError('')
-    } catch (err) {
+    } catch {
       setError('Failed to send request.')
       setSuccess('')
     }
@@ -46,13 +61,31 @@ export default function FriendsPage() {
     try {
       await api.delete(`/api/relationships/${id}`)
       setFriends((prev) => prev.filter((f) => f.id !== id))
-    } catch (err) {
+    } catch {
       setError('Failed to remove friend.')
     }
   }
 
+  const handleAccept = async (id: string) => {
+    try {
+      await api.post(`/api/relationships/${id}/accept`)
+      setPending((prev) => prev.filter((r) => r.id !== id))
+    } catch {
+      setError('Failed to accept request.')
+    }
+  }
+
+  const handleDecline = async (id: string) => {
+    try {
+      await api.delete(`/api/relationships/${id}`)
+      setPending((prev) => prev.filter((r) => r.id !== id))
+    } catch {
+      setError('Failed to decline request.')
+    }
+  }
+
   return (
-    <div className="max-w-2xl mx-auto mt-8 space-y-6">
+    <div className="max-w-2xl mx-auto mt-8 space-y-6 text-white">
       <h1 className="text-2xl font-bold">👥 Friends</h1>
 
       <section>
@@ -80,6 +113,38 @@ export default function FriendsPage() {
                 >
                   Remove
                 </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mt-6">
+        <h2 className="font-semibold mb-2">Pending Friend Requests</h2>
+        {pending.length === 0 ? (
+          <p className="text-gray-400">No pending requests.</p>
+        ) : (
+          <ul className="space-y-2">
+            {pending.map((req, i) => (
+              <li key={i} className="bg-gray-700 p-3 rounded flex justify-between items-center">
+                <div>
+                  <strong>{req.username}</strong>
+                  <p className="text-sm text-gray-400">{req.id}</p>
+                </div>
+                <div className="space-x-2">
+                  <button
+                    onClick={() => handleAccept(req.id)}
+                    className="bg-green-600 px-2 py-1 rounded hover:bg-green-500"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => handleDecline(req.id)}
+                    className="bg-red-600 px-2 py-1 rounded hover:bg-red-500"
+                  >
+                    Decline
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

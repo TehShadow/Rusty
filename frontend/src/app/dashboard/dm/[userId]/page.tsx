@@ -1,77 +1,103 @@
 'use client'
+
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import api from '@/lib/api'
 import { useAuth } from '@/app/components/AuthProvider'
 
 interface DMMessage {
-  id: string
+  id?: string
   content: string
-  author_id: string
+  sender_id: string
   created_at: string
 }
 
 export default function DirectMessagePage() {
-  const { user } = useAuth()
-  const { userId } = useParams()
+  const { user, token } = useAuth()
+  const params = useParams()
+  const userId = typeof params.userId === 'string' ? params.userId : ''
   const [messages, setMessages] = useState<DMMessage[]>([])
   const [newMessage, setNewMessage] = useState('')
-  const [username,setUsername] = useState('')
+  const [username, setUsername] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const socketRef = useRef<WebSocket | null>(null)
 
+  // Fetch message history and user info
   useEffect(() => {
-    const fetchMessages = async () => {
+    if (!userId) return
+
+    api.get(`/api/dm/${userId}`)
+      .then(res => setMessages(res.data))
+      .catch(err => console.error('Failed to load DM:', err))
+
+    api.get(`/api/user/${userId}`)
+      .then(res => setUsername(res.data.username))
+      .catch(err => console.error('Failed to load user:', err))
+  }, [userId])
+
+  // WebSocket connection
+  useEffect(() => {
+    if (typeof window === 'undefined' || !userId || !token) return
+
+    const ws = new WebSocket(`ws://localhost:4000/api/dm/ws/${userId}?token=${token}`)
+
+    ws.onopen = () => console.log('✅ WebSocket connected')
+
+    ws.onmessage = (event) => {
       try {
-        const res = await api.get(`/api/user/dm/${userId}`)
-        setMessages(res.data)
-      } catch (err) {
-        console.error('Failed to load DM:', err)
+        const msg: DMMessage = JSON.parse(event.data)
+        setMessages(prev => [...prev, msg])
+      } catch {
+        console.error('❌ Invalid WS message:', event.data)
       }
     }
 
-    const fetchuser = async () => {
-        try{
-            const res = await api.get(`/api/user/${userId}`)
-            setUsername(res.data.username)
-        }catch(err){
-            console.error('Failed to load user',err)
-        }
+    ws.onerror = () => console.log('⚠️ WebSocket error')
+    ws.onclose = () => console.log('❌ WebSocket disconnected')
+
+    socketRef.current = ws
+
+    return () => {
+      ws.close()
+      console.log('🧹 WebSocket cleaned up')
     }
+  }, [userId, token])
 
-
-    if (userId) fetchMessages()
-    fetchuser()
-  }, [userId])
-
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Send message
   const handleSend = async () => {
     if (!newMessage.trim()) return
     try {
-      const res = await api.post(`/api/dm/${userId}`, { content: newMessage })
-      setMessages(prev => [...prev, res.data])
+      // await api.post(`/api/dm/${userId}`, { content: newMessage })
+      socketRef.current?.send(newMessage)
       setNewMessage('')
     } catch (err) {
       console.error('Failed to send DM:', err)
     }
   }
 
+  if (!user || !userId) return null
+
   return (
     <div className="flex flex-col h-screen max-h-screen p-4">
       <h1 className="text-xl font-bold mb-4">DM with: {username}</h1>
 
       <div className="flex-1 overflow-y-auto space-y-2 bg-gray-800 p-4 rounded">
-        {messages.map((msg) => (
+        {messages.map((msg, i) => (
           <div
-            key={msg.id}
-            className={`p-2 rounded ${
-              msg.author_id === user?.id ? 'bg-blue-600 text-white self-end' : 'bg-gray-700'
+            key={msg.id || i}
+            className={`p-2 rounded max-w-[75%] ${
+              msg.sender_id === user.sub
+                ? 'bg-blue-600 text-white self-end ml-auto'
+                : 'bg-gray-700'
             }`}
           >
             <div className="text-sm text-gray-300">
-              {msg.author_id === user?.id ? 'You' : msg.author_id}
+              {msg.sender_id === user.sub ? 'You' : username}
               <span className="text-xs text-gray-400 ml-2">
                 {new Date(msg.created_at).toLocaleTimeString()}
               </span>
